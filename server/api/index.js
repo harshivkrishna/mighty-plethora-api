@@ -25,7 +25,7 @@ mongoose
   })
   .then(() => console.log('Connected to MongoDB'))
   .catch((err) => console.error('MongoDB connection error:', err));
-
+  mongoose.set('strictQuery', true);
 // Configure multer to store uploaded files locally
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
