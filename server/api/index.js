@@ -72,27 +72,27 @@ app.get('/api/jobs', async (req, res) => {
   }
 });
 
-app.get('/', async (req, res) => {
-  try {
-    res.json({
-      message:'hello'
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch jobs' });
-  }
-});
+// app.get('/', async (req, res) => {
+//   try {
+//     res.json({
+//       message:'hello'
+//     });
+//   } catch (err) {
+//     res.status(500).json({ error: 'Failed to fetch jobs' });
+//   }
+// });
 
 // Add a new job
-app.post('/api/jobs', async (req, res) => {
-  const { title, description, location } = req.body;
-  try {
-    const newJob = new Job({ title, description, location });
-    await newJob.save();
-    res.status(201).json(newJob);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to add job' });
-  }
-});
+// app.post('/api/jobs', async (req, res) => {
+//   const { title, description, location } = req.body;
+//   try {
+//     const newJob = new Job({ title, description, location });
+//     await newJob.save();
+//     res.status(201).json(newJob);
+//   } catch (err) {
+//     res.status(500).json({ error: 'Failed to add job' });
+//   }
+// });
 
 // Update a job
 app.put('/api/jobs/:id', async (req, res) => {
