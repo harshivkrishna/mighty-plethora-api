@@ -19,7 +19,7 @@ app.use(express.json());
 
 // MongoDB connection
 mongoose
-  .connect('mongodb://localhost:27017/', {
+  .connect('mongodb+srv://harshivkrishnam:@2Harshiv@2@mightyplethora.xrgr2.mongodb.net/?retryWrites=true&w=majority&appName=MightyPlethora', {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
