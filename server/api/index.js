@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const multer = require('multer');
-const imageRoutes = require('./routes/imageRoutes'); // Import the image routes
+const imageRoutes = require('../routes/imageRoutes'); // Import the image routes
 
 dotenv.config();
 
