@@ -63,7 +63,7 @@ const Application = mongoose.model('Application', applicationSchema);
 app.use('/api/images', imageRoutes); // Use image routes for image upload
 
 // Fetch available jobs
-app.get('/jobs', async (req, res) => {
+app.get('/api/jobs', async (req, res) => {
   try {
     const jobs = await Job.find();
     res.json(jobs);
