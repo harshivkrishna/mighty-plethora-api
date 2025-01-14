@@ -1,20 +1,20 @@
 const express = require('express');
 const multer = require('multer');
-const path = require('path');
+const { v2: cloudinary } = require('cloudinary');
+const { Readable } = require('stream');
 const Image = require('../models/images'); // Import the Image model
 
 const router = express.Router();
 
-// Set up storage for multer
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, './public/uploads'); // Directory to store the uploaded files
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname)); // Generate unique filename
-  },
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+// Set up multer for handling file uploads in memory
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // POST route for image upload
@@ -24,11 +24,35 @@ router.post('/upload', upload.single('image'), async (req, res) => {
   }
 
   try {
+    // Convert file buffer into a readable stream
+    const uploadStream = async (fileBuffer) => {
+      return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'images' }, // Save in the 'images' folder in Cloudinary
+          (error, result) => {
+            if (error) {
+              reject(error);
+            } else {
+              resolve(result);
+            }
+          }
+        );
+
+        const readable = new Readable();
+        readable.push(fileBuffer);
+        readable.push(null); // Indicate end of stream
+        readable.pipe(stream);
+      });
+    };
+
+    const result = await uploadStream(req.file.buffer); // Upload the image to Cloudinary
+
+    // Save the image info to the database
     const newImage = new Image({
-      imagePath: `/uploads/${req.file.filename}`, // Store the relative path
+      imagePath: result.secure_url, // Save the Cloudinary secure URL
     });
 
-    await newImage.save(); // Save the image to the database
+    await newImage.save();
 
     res.status(200).json({
       success: true,
@@ -36,15 +60,15 @@ router.post('/upload', upload.single('image'), async (req, res) => {
       imagePath: newImage.imagePath,
     });
   } catch (error) {
-    console.error('Error saving image:', error);
-    res.status(500).json({ success: false, message: 'Error saving image to database' });
+    console.error('Error uploading image:', error);
+    res.status(500).json({ success: false, message: 'Error uploading image' });
   }
 });
 
 // GET route to fetch the latest image
 router.get('/latest', async (req, res) => {
   try {
-    const latestImage = await Image.findOne().sort({ uploadDate: -1 }); // Sort by uploadDate descending to get the latest image
+    const latestImage = await Image.findOne().sort({ createdAt: -1 }); // Sort by createdAt descending
 
     if (!latestImage) {
       return res.status(404).json({ success: false, message: 'No images found' });
