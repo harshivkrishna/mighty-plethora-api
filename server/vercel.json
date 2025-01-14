@@ -5,6 +5,11 @@
     ],
     "routes": [
       { "src": "/(.*)", "dest": "/api/index.js" }
-    ]
+    ],
+    "functions": {
+      "api/*": {
+        "timeout": 60
+      }
+    }
   }
   

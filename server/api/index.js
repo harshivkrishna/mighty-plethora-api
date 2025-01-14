@@ -19,7 +19,7 @@ app.use(express.json());
 
 // MongoDB connection
 mongoose
-  .connect('mongodb+srv://harshivkrishnam:@2Harshiv@2@mightyplethora.xrgr2.mongodb.net/?retryWrites=true&w=majority&appName=MightyPlethora', {
+  .connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
