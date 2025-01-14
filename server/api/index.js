@@ -1,10 +1,11 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const path = require('path');
-const multer = require('multer');
 const dotenv = require('dotenv');
-const imageRoutes = require('./routes/imageRoutes'); // Import the image routes
+const multer = require('multer');
+const { v2: cloudinary } = require('cloudinary');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const imageRoutes = require('../routes/imageRoutes'); // Import the image routes
 
 dotenv.config();
 
@@ -15,16 +16,39 @@ const port = process.env.PORT || 5000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'public/uploads'))); // Serve uploaded images from the public/uploads folder
 
 // MongoDB connection
 mongoose
   .connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 5000,  
+  socketTimeoutMS: 45000, 
   })
   .then(() => console.log('Connected to MongoDB'))
   .catch((err) => console.error('MongoDB connection error:', err));
+
+// Configure Cloudinary
+cloudinary.config({
+  // cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  // api_key: process.env.CLOUDINARY_API_KEY,
+  // api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: 'dnqgtfsq7',
+  api_key: 665748615873447,
+  api_secret: 'orw5HInqLwlNYR-146_I2RlDcnk',
+});
+
+// Configure Cloudinary storage for file uploads
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'resumes',
+    format: async () => 'pdf', // Enforce PDF format
+    public_id: (req, file) => `${Date.now()}-${file.originalname}`,
+  },
+});
+
+const upload = multer({ storage });
 
 // Job schema and model
 const jobSchema = new mongoose.Schema({
@@ -42,22 +66,10 @@ const applicationSchema = new mongoose.Schema({
   email: { type: String, required: true },
   phone: { type: String, required: true },
   portfolio: { type: String },
-  resume: { type: String, required: true },
+  resumeUrl: { type: String, required: true }, // Store Cloudinary URL
 });
 
 const Application = mongoose.model('Application', applicationSchema);
-
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'public/uploads/resumes');
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  },
-});
-
-const upload = multer({ storage });
 
 // Routes
 app.use('/api/images', imageRoutes); // Use image routes for image upload
@@ -72,6 +84,15 @@ app.get('/api/jobs', async (req, res) => {
   }
 });
 
+app.get('/', async (req, res) => {
+  try {
+    res.json({
+      message:'hello'
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch jobs' });
+  }
+});
 // Add a new job
 app.post('/api/jobs', async (req, res) => {
   const { title, description, location } = req.body;
@@ -120,14 +141,14 @@ app.delete('/api/jobs/:id', async (req, res) => {
 // Submit a job application
 app.post('/api/applications', upload.single('resume'), async (req, res) => {
   const { jobId, name, email, phone, portfolio } = req.body;
-  const resume = req.file ? `/uploads/resumes/${req.file.filename}` : null;
+  const resumeUrl = req.file ? req.file.path : null;
 
-  if (!resume) {
+  if (!resumeUrl) {
     return res.status(400).json({ error: 'Resume upload failed' });
   }
 
   try {
-    const application = new Application({ jobId, name, email, phone, portfolio, resume });
+    const application = new Application({ jobId, name, email, phone, portfolio, resumeUrl });
     await application.save();
     res.status(201).json({ message: 'Application submitted successfully' });
   } catch (err) {
@@ -146,7 +167,20 @@ app.get('/api/applications', async (req, res) => {
   }
 });
 
-
+// Delete an application
+app.delete('/api/applications/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const deletedApplication = await Application.findByIdAndDelete(id);
+    if (!deletedApplication) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+    res.status(204).send(); // Successfully deleted, no content to send
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete application' });
+  }
+});
 
 // Start the server
 app.listen(port, () => {
