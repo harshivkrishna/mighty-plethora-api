@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
 const imageRoutes = require('../routes/imageRoutes'); // Import the image routes
 
 dotenv.config();
@@ -20,22 +21,23 @@ mongoose
   .connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 5000,  
-    socketTimeoutMS: 45000, 
+    serverSelectionTimeoutMS: 5000,
+    socketTimeoutMS: 45000,
   })
   .then(() => console.log('Connected to MongoDB'))
   .catch((err) => console.error('MongoDB connection error:', err));
-  mongoose.set('strictQuery', false);
-// Configure multer to store uploaded files locally
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/resumes'); // Store files in the 'resumes' folder
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  },
+
+mongoose.set('strictQuery', false);
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
+// Configure multer to handle file uploads in memory
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // Job schema and model
@@ -54,7 +56,7 @@ const applicationSchema = new mongoose.Schema({
   email: { type: String, required: true },
   phone: { type: String, required: true },
   portfolio: { type: String },
-  resumeUrl: { type: String, required: true }, // Store local file path
+  resumeUrl: { type: String, required: true }, // Store Cloudinary file URL
 });
 
 const Application = mongoose.model('Application', applicationSchema);
@@ -73,13 +75,7 @@ app.get('/api/jobs', async (req, res) => {
 });
 
 app.get('/', async (req, res) => {
-  try {
-    res.json({
-      message:'hello'
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch jobs' });
-  }
+  res.json({ message: 'hello' });
 });
 
 // Add a new job
@@ -130,14 +126,32 @@ app.delete('/api/jobs/:id', async (req, res) => {
 // Submit a job application
 app.post('/api/applications', upload.single('resume'), async (req, res) => {
   const { jobId, name, email, phone, portfolio } = req.body;
-  const resumeUrl = req.file ? `/uploads/resumes/${req.file.filename}` : null; // Local file path
 
-  if (!resumeUrl) {
-    return res.status(400).json({ error: 'Resume upload failed' });
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
   }
 
   try {
-    const application = new Application({ jobId, name, email, phone, portfolio, resumeUrl });
+    // Upload resume to Cloudinary
+    const uploadResult = await cloudinary.uploader.upload_stream(
+      { folder: 'resumes' },
+      (error, result) => {
+        if (error) {
+          throw new Error('Failed to upload resume to Cloudinary');
+        }
+        return result;
+      }
+    );
+
+    const application = new Application({
+      jobId,
+      name,
+      email,
+      phone,
+      portfolio,
+      resumeUrl: uploadResult.secure_url, // Use Cloudinary URL
+    });
+
     await application.save();
     res.status(201).json({ message: 'Application submitted successfully' });
   } catch (err) {
@@ -164,7 +178,7 @@ app.delete('/api/applications/:id', async (req, res) => {
     if (!deletedApplication) {
       return res.status(404).json({ error: 'Application not found' });
     }
-    res.status(204).send(); // Successfully deleted, no content to send
+    res.status(204).send();
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to delete application' });
