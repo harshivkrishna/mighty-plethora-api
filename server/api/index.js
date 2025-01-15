@@ -33,6 +33,7 @@ mongoose
   })
   .then(() => console.log('Connected to MongoDB'))
   .catch((err) => console.error('MongoDB connection error:', err));
+  
 mongoose.set('strictQuery', false);
 
 // Job schema and model
@@ -78,25 +79,37 @@ app.post('/api/applications', multer().single('resume'), async (req, res) => {
   }
 
   try {
-    // Upload the resume to Cloudinary
-    const result = await cloudinary.uploader.upload(req.file.path, {
-      folder: 'job_applications', // Specify folder in Cloudinary
-      resource_type: 'auto', // Automatically determine file type (e.g., pdf, docx)
-    });
+    // Upload the resume to Cloudinary using upload_stream
+    const result = await cloudinary.uploader.upload_stream(
+      { 
+        folder: 'job_applications', // Specify folder in Cloudinary
+        resource_type: 'auto' // Automatically detect file type
+      },
+      async (error, result) => {
+        if (error) {
+          return res.status(500).json({ error: 'Cloudinary upload failed', details: error });
+        }
 
-    const resumeUrl = result.secure_url; // Get the Cloudinary URL
+        // Save the resume URL in the database
+        const resumeUrl = result.secure_url;
 
-    const application = new Application({
-      jobId,
-      name,
-      email,
-      phone,
-      portfolio,
-      resumeUrl,
-    });
+        const application = new Application({
+          jobId,
+          name,
+          email,
+          phone,
+          portfolio,
+          resumeUrl,
+        });
 
-    await application.save();
-    res.status(201).json({ message: 'Application submitted successfully' });
+        await application.save();
+        res.status(201).json({ message: 'Application submitted successfully' });
+      }
+    );
+
+    // Pass the file buffer to Cloudinary upload stream
+    req.pipe(result);
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to submit application' });
@@ -127,6 +140,12 @@ app.delete('/api/applications/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to delete application' });
   }
 });
+
+app.use(cors({
+  origin: ['https://mighty-plethora.vercel.app/', 'https://mighty-plethora-api-zfw2.vercel.app/'], // Add your hosted domain here
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+}));
+
 
 // Start the server
 app.listen(port, () => {
