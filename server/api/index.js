@@ -3,9 +3,17 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const multer = require('multer');
+const cloudinary = require('cloudinary').v2; // Import Cloudinary
 const imageRoutes = require('../routes/imageRoutes'); // Import the image routes
 
 dotenv.config();
+
+// Initialize Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 // Initialize express app
 const app = express();
@@ -25,18 +33,7 @@ mongoose
   })
   .then(() => console.log('Connected to MongoDB'))
   .catch((err) => console.error('MongoDB connection error:', err));
-  mongoose.set('strictQuery', false);
-// Configure multer to store uploaded files locally
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/resumes'); // Store files in the 'resumes' folder
-  },
-  filename: (req, file, cb) => {
-    cb(null, `${Date.now()}-${file.originalname}`);
-  },
-});
-
-const upload = multer({ storage });
+mongoose.set('strictQuery', false);
 
 // Job schema and model
 const jobSchema = new mongoose.Schema({
@@ -54,7 +51,7 @@ const applicationSchema = new mongoose.Schema({
   email: { type: String, required: true },
   phone: { type: String, required: true },
   portfolio: { type: String },
-  resumeUrl: { type: String, required: true }, // Store local file path
+  resumeUrl: { type: String, required: true }, // Store Cloudinary URL
 });
 
 const Application = mongoose.model('Application', applicationSchema);
@@ -72,72 +69,32 @@ app.get('/api/jobs', async (req, res) => {
   }
 });
 
-app.get('/', async (req, res) => {
-  try {
-    res.json({
-      message:'hello'
-    });
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch jobs' });
-  }
-});
-
-// Add a new job
-app.post('/api/jobs', async (req, res) => {
-  const { title, description, location } = req.body;
-  try {
-    const newJob = new Job({ title, description, location });
-    await newJob.save();
-    res.status(201).json(newJob);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to add job' });
-  }
-});
-
-// Update a job
-app.put('/api/jobs/:id', async (req, res) => {
-  const { id } = req.params;
-  const { title, description, location } = req.body;
-  try {
-    const updatedJob = await Job.findByIdAndUpdate(
-      id,
-      { title, description, location },
-      { new: true }
-    );
-    if (!updatedJob) {
-      return res.status(404).json({ error: 'Job not found' });
-    }
-    res.json(updatedJob);
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to update job' });
-  }
-});
-
-// Delete a job
-app.delete('/api/jobs/:id', async (req, res) => {
-  const { id } = req.params;
-  try {
-    const deletedJob = await Job.findByIdAndDelete(id);
-    if (!deletedJob) {
-      return res.status(404).json({ error: 'Job not found' });
-    }
-    res.status(204).send();
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to delete job' });
-  }
-});
-
 // Submit a job application
-app.post('/api/applications', upload.single('resume'), async (req, res) => {
+app.post('/api/applications', multer().single('resume'), async (req, res) => {
   const { jobId, name, email, phone, portfolio } = req.body;
-  const resumeUrl = req.file ? `/uploads/resumes/${req.file.filename}` : null; // Local file path
-
-  if (!resumeUrl) {
-    return res.status(400).json({ error: 'Resume upload failed' });
+  
+  if (!req.file) {
+    return res.status(400).json({ error: 'Resume file is required' });
   }
 
   try {
-    const application = new Application({ jobId, name, email, phone, portfolio, resumeUrl });
+    // Upload the resume to Cloudinary
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      folder: 'job_applications', // Specify folder in Cloudinary
+      resource_type: 'auto', // Automatically determine file type (e.g., pdf, docx)
+    });
+
+    const resumeUrl = result.secure_url; // Get the Cloudinary URL
+
+    const application = new Application({
+      jobId,
+      name,
+      email,
+      phone,
+      portfolio,
+      resumeUrl,
+    });
+
     await application.save();
     res.status(201).json({ message: 'Application submitted successfully' });
   } catch (err) {

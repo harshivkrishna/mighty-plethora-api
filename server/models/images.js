@@ -4,11 +4,19 @@ const mongoose = require('mongoose');
 const imageSchema = new mongoose.Schema({
   imagePath: {
     type: String,
-    required: true,
+    required: true, // Store the Cloudinary URL
   },
   uploadDate: {
     type: Date,
-    default: Date.now,
+    default: Date.now, // Automatically set the upload date
+  },
+  imageType: {
+    type: String,
+    required: false, // Optional field to store the file type (e.g., jpg, png)
+  },
+  publicId: {
+    type: String,
+    required: false, // Optional field to store Cloudinary public_id for image management
   },
 });
 
