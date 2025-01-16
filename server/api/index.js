@@ -34,7 +34,7 @@ app.use(cors({
   origin: [
     'https://mighty-plethora.vercel.app/',
     'https://mighty-plethora-api-zfw2.vercel.app/',
-    'http://localhost:5173'
+    // 'http://localhost:5173'
   ], // Add your hosted domain here
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
 }));
