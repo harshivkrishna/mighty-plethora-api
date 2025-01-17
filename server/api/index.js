@@ -29,15 +29,17 @@ cloudinary.api.create_folder('job_applications', (error, result) => {
 const app = express();
 const port = process.env.PORT || 5000;
 
+
+app.use(cors());
 // Middleware
-app.use(cors({
-  origin: [
-    'https://mighty-plethora.vercel.app/',
-    'https://mighty-plethora-api-zfw2.vercel.app/',
-    // 'http://localhost:5173'
-  ], // Add your hosted domain here
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-}));
+// app.use(cors({
+//   origin: [
+//     'https://mighty-plethora.vercel.app/',
+//     'https://mighty-plethora-api-zfw2.vercel.app/',
+//     'http://localhost:5173'
+//   ], // Add your hosted domain here
+//   methods: ['GET', 'POST', 'PUT', 'DELETE'],
+// }));
 app.use(express.json());
 
 // MongoDB connection
