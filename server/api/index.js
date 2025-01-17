@@ -84,24 +84,24 @@ app.get('/api/jobs', async (req, res) => {
 // Submit a job application
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 10 * 1024 * 1024 }, // 5MB limit
 });
+
 
 app.post('/api/applications', upload.single('resume'), async (req, res) => {
   const { jobId, name, email, phone, portfolio } = req.body;
 
+  // Check if file exists
   if (!req.file) {
     return res.status(400).json({ error: 'Resume file is required' });
   }
 
-  const allowedTypes = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  ];
+  // Allowed image MIME types
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
 
+  // Validate file type
   if (!allowedTypes.includes(req.file.mimetype)) {
-    return res.status(400).json({ error: 'Invalid file type. Only PDF, DOC, and DOCX are allowed.' });
+    return res.status(400).json({ error: 'Invalid file type. Only JPEG, JPG, and PNG are allowed.' });
   }
 
   try {
@@ -109,16 +109,16 @@ app.post('/api/applications', upload.single('resume'), async (req, res) => {
     const stream = cloudinary.uploader.upload_stream(
       {
         folder: 'job_applications',
-        resource_type: 'auto',
+        resource_type: 'image', // Set resource type to image
       },
       async (error, result) => {
         if (error) {
           console.error('Cloudinary upload failed:', error);
           return res.status(500).json({ error: 'Cloudinary upload failed', details: error });
         }
-    
+
         const resumeUrl = result.secure_url;
-    
+
         // Save to the database
         const application = new Application({
           jobId,
@@ -128,24 +128,20 @@ app.post('/api/applications', upload.single('resume'), async (req, res) => {
           portfolio,
           resumeUrl,
         });
-    
+
         await application.save();
         res.status(201).json({ message: 'Application submitted successfully' });
       }
     );
-    
+
     // Stream the file buffer
     streamifier.createReadStream(req.file.buffer).pipe(stream);
-    
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to submit application' });
   }
-  console.log(req.file.buffer); // Debug: Check file buffer content
-if (!req.file.buffer || req.file.buffer.length === 0) {
-  return res.status(400).json({ error: 'Uploaded file is empty' });
-}
 });
+
 
 
 
