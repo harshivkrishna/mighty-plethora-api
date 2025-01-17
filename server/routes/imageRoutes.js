@@ -1,20 +1,20 @@
 const express = require('express');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2; // Import Cloudinary
-const path = require('path');
+const streamifier = require('streamifier'); // To handle in-memory buffer as a stream
 const Image = require('../models/images'); // Import the Image model
 
 const router = express.Router();
 
 // Configure Cloudinary
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || 'dnqgtfsq7',
+  api_key: process.env.CLOUDINARY_API_KEY || '665748615873447',
+  api_secret: process.env.CLOUDINARY_API_SECRET || 'orw5HInqLwlNYR-146_I2RlDcnk',
 });
 
-// Set up storage for multer (not used for actual file upload as Cloudinary will handle it)
-const storage = multer.memoryStorage(); // Store files in memory
+// Set up storage for multer (memory storage)
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // POST route for image upload
@@ -24,35 +24,38 @@ router.post('/upload', upload.single('image'), async (req, res) => {
   }
 
   try {
-    // Upload the image to Cloudinary
-    const result = await cloudinary.uploader.upload_stream(
-      { resource_type: 'auto' }, // Auto-detect file type (e.g., jpg, png)
-      async (error, result) => {
-        if (error) {
-          return res.status(500).json({ success: false, message: 'Cloudinary upload failed', error });
+    // Upload the image to Cloudinary using a stream
+    const result = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        { resource_type: 'image' }, // Specify resource type
+        (error, result) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(result);
+          }
         }
+      );
 
-        // Save image URL to the database
-        const newImage = new Image({
-          imagePath: result.secure_url, // Cloudinary URL
-        });
+      // Convert buffer to stream and pipe it to Cloudinary
+      streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+    });
 
-        await newImage.save(); // Save the image to the database
+    // Save the Cloudinary URL to the database
+    const newImage = new Image({
+      imagePath: result.secure_url,
+    });
 
-        res.status(200).json({
-          success: true,
-          message: 'Image uploaded successfully!',
-          imagePath: newImage.imagePath,
-        });
-      }
-    );
+    await newImage.save();
 
-    // Pass the image data from memory storage to Cloudinary
-    req.pipe(result);
-
+    res.status(200).json({
+      success: true,
+      message: 'Image uploaded successfully!',
+      imagePath: newImage.imagePath,
+    });
   } catch (error) {
     console.error('Error saving image:', error);
-    res.status(500).json({ success: false, message: 'Error saving image to database' });
+    res.status(500).json({ success: false, message: 'Error saving image to Cloudinary' });
   }
 });
 
