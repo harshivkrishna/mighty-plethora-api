@@ -20,8 +20,6 @@ cloudinary.config({
 cloudinary.api.create_folder('job_applications', (error, result) => {
   if (error) {
     console.error('Error creating folder in Cloudinary:', error);
-  } else {
-    console.log('Cloudinary folder created:', result);
   }
 });
 
@@ -170,6 +168,160 @@ app.delete('/api/applications/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to delete application' });
   }
 });
+
+// Blog schema and model
+const blogSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  content: { type: String, required: true },
+  coverImageUrl: { type: String, required: false }, // Optional cover image URL
+  createdAt: { type: Date, default: Date.now },
+});
+
+const Blog = mongoose.model('Blog', blogSchema);
+
+// Multer configuration for handling image uploads
+// const upload = multer({
+//   storage: multer.memoryStorage(),
+//   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+// });
+
+// Create a new blog with cover image
+app.post('/api/blogs', upload.single('coverImage'), async (req, res) => {
+  const { title, content } = req.body;
+
+  if (!title || !content) {
+    return res.status(400).json({ error: 'Title, content are required' });
+  }
+
+  try {
+    let coverImageUrl = '';
+
+    // If a cover image is provided, upload it to Cloudinary
+    if (req.file) {
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'blogs', resource_type: 'image' },
+          (error, result) => {
+            if (error) reject(error);
+            resolve(result);
+          }
+        );
+        streamifier.createReadStream(req.file.buffer).pipe(stream);
+      });
+
+      coverImageUrl = result.secure_url;
+    }
+
+    // Create and save the blog
+    const newBlog = new Blog({ title, content, coverImageUrl });
+    await newBlog.save();
+    res.status(201).json(newBlog);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create blog' });
+  }
+});
+
+// Update a blog with optional new cover image
+app.put('/api/blogs/:id', upload.single('coverImage'), async (req, res) => {
+  const { id } = req.params;
+  const { title, content } = req.body;
+
+  if (!title || !content) {
+    return res.status(400).json({ error: 'Title and content are required' });
+  }
+
+  try {
+    let coverImageUrl = null;
+
+    // If a new cover image is provided, upload it to Cloudinary
+    if (req.file) {
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'blogs', resource_type: 'image' },
+          (error, result) => {
+            if (error) reject(error);
+            resolve(result);
+          }
+        );
+        streamifier.createReadStream(req.file.buffer).pipe(stream);
+      });
+
+      coverImageUrl = result.secure_url;
+    }
+
+    // Update the blog with or without a new cover image
+    const updatedData = { title, content};
+    if (coverImageUrl) updatedData.coverImageUrl = coverImageUrl;
+
+    const updatedBlog = await Blog.findByIdAndUpdate(id, updatedData, { new: true, runValidators: true });
+    if (!updatedBlog) {
+      return res.status(404).json({ error: 'Blog not found' });
+    }
+
+    res.json(updatedBlog);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update blog' });
+  }
+});
+
+// Fetch all blogs
+app.get('/api/blogs', async (req, res) => {
+  try {
+    const blogs = await Blog.find().sort({ createdAt: -1 }); // Sort by latest first
+    res.json(blogs);
+  } catch (err) {
+    console.error("Error fetching blogs:", err);
+    res.status(500).json({ error: "Failed to fetch blogs" });
+  }
+});
+
+// Fetch a single blog by ID
+app.get('/api/blogs/:id', async (req, res) => {
+  try {
+    const blog = await Blog.findById(req.params.id);
+    if (!blog) {
+      return res.status(404).json({ error: "Blog not found" });
+    }
+    res.json(blog);
+  } catch (err) {
+    console.error("Error fetching blog:", err);
+    res.status(500).json({ error: "Failed to fetch blog" });
+  }
+});
+
+app.put("/api/blogs/:id", upload.single("coverImage"), async (req, res) => {
+  try {
+    const { title, content } = req.body;
+    const coverImageUrl = req.file ? `/uploads/${req.file.filename}` : undefined;
+
+    const updatedBlog = await Blog.findByIdAndUpdate(
+      req.params.id,
+      { title, content, ...(coverImageUrl && { coverImageUrl }) },
+      { new: true }
+    );
+
+    if (!updatedBlog) return res.status(404).json({ error: "Blog not found" });
+
+    res.json(updatedBlog);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update blog" });
+  }
+});
+
+app.delete("/api/blogs/:id", async (req, res) => {
+  try {
+    const deletedBlog = await Blog.findByIdAndDelete(req.params.id);
+    if (!deletedBlog) return res.status(404).json({ error: "Blog not found" });
+
+    res.json({ message: "Blog deleted successfully" });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to delete blog" });
+  }
+});
+
+
 
 // Start the server
 app.listen(port, () => {
