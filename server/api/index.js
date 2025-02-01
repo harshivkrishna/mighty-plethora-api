@@ -52,6 +52,14 @@ const jobSchema = new mongoose.Schema({
   location: { type: String, required: true },
 });
 
+const blogSchema = new mongoose.Schema({
+  title: { type: String, required: true },
+  content: { type: String, required: true },
+  coverImageUrl: { type: String, required: false }, // Optional cover image URL
+  createdAt: { type: Date, default: Date.now },
+});
+
+
 const Job = mongoose.model('Job', jobSchema);
 
 // Application schema and model
@@ -142,8 +150,6 @@ app.post('/api/applications', upload.single('resume'), async (req, res) => {
 
 
 
-
-
 // Fetch all applications (Admin)
 app.get('/api/applications', async (req, res) => {
   try {
@@ -170,21 +176,7 @@ app.delete('/api/applications/:id', async (req, res) => {
 });
 
 // Blog schema and model
-const blogSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  content: { type: String, required: true },
-  coverImageUrl: { type: String, required: false }, // Optional cover image URL
-  createdAt: { type: Date, default: Date.now },
-});
-
 const Blog = mongoose.model('Blog', blogSchema);
-
-// Multer configuration for handling image uploads
-// const upload = multer({
-//   storage: multer.memoryStorage(),
-//   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
-// });
-
 // Create a new blog with cover image
 app.post('/api/blogs', upload.single('coverImage'), async (req, res) => {
   const { title, content } = req.body;
